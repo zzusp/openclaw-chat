@@ -1,0 +1,125 @@
+{
+  "name": "openclaw-chat",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "OpenClaw Chat channel plugin — WebSocket bridge for an iOS app (or web client) to chat with OpenClaw/Clawdbot.",
+  "author": "OpenClaw Chat",
+  "license": "MIT",
+  "homepage": "https://example.com/openclaw-chat",
+  "repository": {
+    "type": "git",
+    "url": "https://example.com/openclaw-chat.git"
+  },
+  "keywords": [
+    "clawdbot",
+    "openclaw",
+    "chatbot",
+    "ai-agent",
+    "messaging",
+    "channel-plugin",
+    "websocket",
+    "ios"
+  ],
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./openclaw": {
+      "import": "./dist/index.openclaw.js",
+      "types": "./dist/index.openclaw.d.ts"
+    },
+    "./clawdbot": {
+      "import": "./dist/index.clawdbot.js",
+      "types": "./dist/index.clawdbot.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "clawdbot.plugin.json",
+    "openclaw.plugin.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "clawdbot": {
+    "extensions": [
+      "./dist/index.clawdbot.js"
+    ],
+    "channel": {
+      "id": "openclawChat",
+      "label": "OpenClaw Chat",
+      "selectionLabel": "OpenClaw Chat",
+      "docsPath": "/channels/openclaw-chat",
+      "docsLabel": "openclaw-chat",
+      "blurb": "WebSocket bridge for OpenClaw Chat (iOS app or web client).",
+      "aliases": [
+        "occhat",
+        "ios"
+      ],
+      "order": 90,
+      "quickstartAllowFrom": true
+    },
+    "install": {
+      "npmSpec": "openclaw-chat",
+      "defaultChoice": "npm"
+    }
+  },
+  "openclaw": {
+    "extensions": [
+      "./dist/index.openclaw.js"
+    ],
+    "channel": {
+      "id": "openclawChat",
+      "label": "OpenClaw Chat",
+      "selectionLabel": "OpenClaw Chat",
+      "docsPath": "/channels/openclaw-chat",
+      "docsLabel": "openclaw-chat",
+      "blurb": "WebSocket bridge for OpenClaw Chat (iOS app or web client).",
+      "aliases": [
+        "occhat",
+        "ios"
+      ],
+      "order": 90,
+      "quickstartAllowFrom": true
+    },
+    "install": {
+      "npmSpec": "openclaw-chat",
+      "defaultChoice": "npm"
+    }
+  },
+  "scripts": {
+    "build": "node scripts/build.js all",
+    "build:openclaw": "node scripts/build.js openclaw",
+    "build:clawdbot": "node scripts/build.js clawdbot",
+    "clean": "rm -rf dist src/sdk.ts",
+    "prepublishOnly": "npm run clean && npm run build",
+    "version": "node scripts/sync-version.js && git add *.plugin.json",
+    "typecheck": "tsc --noEmit",
+    "test:ci": "node --test",
+    "test": "npm run build && npm run test:ci"
+  },
+  "peerDependencies": {
+    "clawdbot": ">=2026.1.20",
+    "openclaw": ">=2026.1.29"
+  },
+  "peerDependenciesMeta": {
+    "clawdbot": {
+      "optional": true
+    },
+    "openclaw": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.8.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

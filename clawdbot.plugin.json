@@ -1,0 +1,15 @@
+{
+  "id": "openclaw-chat",
+  "name": "OpenClaw Chat",
+  "description": "OpenClaw Chat channel plugin — WebSocket bridge for iOS app/web client",
+  "version": "0.1.0",
+  "main": "dist/index.clawdbot.js",
+  "channels": [
+    "openclawChat"
+  ],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}

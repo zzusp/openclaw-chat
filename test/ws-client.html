@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OpenClaw Chat WebSocket Test</title>
+    <style>
+      :root {
+        --bg: #0f1419;
+        --panel: #151b22;
+        --text: #e6edf3;
+        --muted: #7d8590;
+        --accent: #2f81f7;
+        --border: #30363d;
+      }
+      * {
+        box-sizing: border-box;
+        font-family: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+      }
+      body {
+        margin: 0;
+        background: linear-gradient(135deg, #0f1419 0%, #0b1020 100%);
+        color: var(--text);
+      }
+      .wrap {
+        max-width: 1000px;
+        margin: 24px auto;
+        padding: 24px;
+      }
+      h1 {
+        margin: 0 0 16px 0;
+        font-size: 20px;
+      }
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 16px;
+        margin-bottom: 16px;
+      }
+      .row {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        flex: 1;
+        min-width: 180px;
+      }
+      label {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      input, textarea, select, button {
+        background: #0b0f14;
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 10px;
+      }
+      textarea {
+        min-height: 100px;
+      }
+      button {
+        cursor: pointer;
+        background: var(--accent);
+        border: none;
+        font-weight: 600;
+      }
+      button.secondary {
+        background: transparent;
+        border: 1px solid var(--border);
+      }
+      .log {
+        height: 280px;
+        overflow: auto;
+        background: #0b0f14;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 12px;
+        font-size: 12px;
+        white-space: pre-wrap;
+      }
+      .badge {
+        display: inline-block;
+        padding: 4px 8px;
+        border-radius: 999px;
+        font-size: 12px;
+        background: #1f6feb;
+        color: white;
+      }
+      .status {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .muted {
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>OpenClaw Chat WebSocket Test Client</h1>
+      <div class="panel">
+        <div class="row">
+          <div class="field">
+            <label>Host</label>
+            <input id="host" value="127.0.0.1" />
+          </div>
+          <div class="field">
+            <label>Port</label>
+            <input id="port" value="8787" />
+          </div>
+          <div class="field">
+            <label>Path</label>
+            <input id="path" value="/openclaw-chat" />
+          </div>
+          <div class="field">
+            <label>Token</label>
+            <input id="token" placeholder="authToken (optional)" />
+          </div>
+          <div class="field">
+            <label>Client ID</label>
+            <input id="clientId" value="ios-user-001" />
+          </div>
+        </div>
+        <div class="row" style="margin-top: 12px;">
+          <button id="connect">Connect</button>
+          <button id="disconnect" class="secondary">Disconnect</button>
+          <div class="status">
+            <span class="badge" id="status">disconnected</span>
+            <span class="muted" id="wsUrl"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="field">
+          <label>Message</label>
+          <textarea id="message" placeholder="Type message..."></textarea>
+        </div>
+        <div class="row" style="margin-top: 12px;">
+          <button id="send">Send Message</button>
+          <button id="hello" class="secondary">Send Hello</button>
+          <button id="ping" class="secondary">Ping</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="row" style="justify-content: space-between; align-items: center;">
+          <div class="muted">Logs</div>
+          <button id="clear" class="secondary">Clear</button>
+        </div>
+        <div class="log" id="log"></div>
+      </div>
+    </div>
+
+    <script>
+      let socket;
+      const logEl = document.getElementById("log");
+      const statusEl = document.getElementById("status");
+      const wsUrlEl = document.getElementById("wsUrl");
+
+      function log(...args) {
+        const line = args.join(" ");
+        logEl.textContent += `[${new Date().toLocaleTimeString()}] ${line}\n`;
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+
+      function setStatus(text, ok) {
+        statusEl.textContent = text;
+        statusEl.style.background = ok ? "#2ea043" : "#d73a49";
+      }
+
+      function buildUrl() {
+        const host = document.getElementById("host").value.trim();
+        const port = document.getElementById("port").value.trim();
+        const path = document.getElementById("path").value.trim();
+        const token = document.getElementById("token").value.trim();
+        const clientId = document.getElementById("clientId").value.trim();
+
+        const qs = new URLSearchParams();
+        if (token) qs.set("token", token);
+        if (clientId) qs.set("clientId", clientId);
+        const query = qs.toString();
+        return `ws://${host}:${port}${path}${query ? `?${query}` : ""}`;
+      }
+
+      document.getElementById("connect").addEventListener("click", () => {
+        const url = buildUrl();
+        wsUrlEl.textContent = url;
+        socket = new WebSocket(url);
+
+        socket.addEventListener("open", () => {
+          log("connected");
+          setStatus("connected", true);
+        });
+        socket.addEventListener("message", (event) => {
+          log("recv:", event.data);
+        });
+        socket.addEventListener("close", () => {
+          log("disconnected");
+          setStatus("disconnected", false);
+        });
+        socket.addEventListener("error", (err) => {
+          log("error:", err.message || err);
+        });
+      });
+
+      document.getElementById("disconnect").addEventListener("click", () => {
+        if (socket) socket.close();
+      });
+
+      document.getElementById("send").addEventListener("click", () => {
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
+          log("not connected");
+          return;
+        }
+        const text = document.getElementById("message").value;
+        const clientId = document.getElementById("clientId").value.trim();
+        const payload = { type: "message", text, clientId };
+        socket.send(JSON.stringify(payload));
+        log("sent:", JSON.stringify(payload));
+      });
+
+      document.getElementById("hello").addEventListener("click", () => {
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
+          log("not connected");
+          return;
+        }
+        const token = document.getElementById("token").value.trim();
+        const clientId = document.getElementById("clientId").value.trim();
+        const payload = { type: "hello", clientId, token };
+        socket.send(JSON.stringify(payload));
+        log("sent:", JSON.stringify(payload));
+      });
+
+      document.getElementById("ping").addEventListener("click", () => {
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
+          log("not connected");
+          return;
+        }
+        socket.send(JSON.stringify({ type: "ping" }));
+        log("sent: ping");
+      });
+
+      document.getElementById("clear").addEventListener("click", () => {
+        logEl.textContent = "";
+      });
+    </script>
+  </body>
+</html>
