@@ -32,6 +32,7 @@ import { probeOpenclawChat } from "./probe.js";
 import { sendMediaMessage, sendSystemMessage, sendTextMessage } from "./send.js";
 import { collectOpenclawChatStatusIssues } from "./status-issues.js";
 import { startOpenclawChatProvider } from "./receive.js";
+import { appendConversationMessage } from "./conversation-store.js";
 
 const meta = {
   id: "openclawChat",
@@ -305,6 +306,22 @@ export const openclawChatPlugin: ChannelPlugin<ResolvedOpenclawChatAccount> = {
         cfg: cfg as ClawdbotConfig,
       });
       const result = await sendTextMessage(account.accountId, to, text);
+      try {
+        await appendConversationMessage({
+          account,
+          conversationId: to,
+          message: {
+            direction: "outbound",
+            ts: Date.now(),
+            from: "openclaw",
+            to,
+            text,
+            chatType: "direct",
+          },
+        });
+      } catch {
+        // ignore history errors to avoid blocking outbound delivery
+      }
       return {
         channel: "openclawChat",
         ok: result.ok,
@@ -318,6 +335,23 @@ export const openclawChatPlugin: ChannelPlugin<ResolvedOpenclawChatAccount> = {
         cfg: cfg as ClawdbotConfig,
       });
       const result = await sendMediaMessage(account.accountId, to, mediaUrl ?? "", text);
+      try {
+        await appendConversationMessage({
+          account,
+          conversationId: to,
+          message: {
+            direction: "outbound",
+            ts: Date.now(),
+            from: "openclaw",
+            to,
+            text,
+            mediaUrl: mediaUrl ?? undefined,
+            chatType: "direct",
+          },
+        });
+      } catch {
+        // ignore history errors to avoid blocking outbound delivery
+      }
       return {
         channel: "openclawChat",
         ok: result.ok,

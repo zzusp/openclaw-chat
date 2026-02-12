@@ -84,6 +84,9 @@
         font-size: 12px;
         white-space: pre-wrap;
       }
+      .log.small {
+        height: 200px;
+      }
       .badge {
         display: inline-block;
         padding: 4px 8px;
@@ -151,6 +154,40 @@
       </div>
 
       <div class="panel">
+        <div class="row">
+          <div class="field">
+            <label>Conversation ID (optional)</label>
+            <input id="conversationId" placeholder="conv-..." />
+          </div>
+          <div class="field">
+            <label>Conversation Title</label>
+            <input id="conversationTitle" placeholder="项目讨论" />
+          </div>
+          <div class="field">
+            <label>Participants (comma separated)</label>
+            <input id="conversationParticipants" placeholder="user-a,user-b" />
+          </div>
+          <div class="field">
+            <label>Limit</label>
+            <input id="historyLimit" value="200" />
+          </div>
+        </div>
+        <div class="row" style="margin-top: 12px;">
+          <button id="createConversation">New Conversation</button>
+          <button id="listConversations" class="secondary">List Conversations</button>
+          <button id="getHistory" class="secondary">Get History</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="row" style="justify-content: space-between; align-items: center;">
+          <div class="muted">Conversations / History</div>
+          <button id="clearData" class="secondary">Clear</button>
+        </div>
+        <div class="log small" id="data"></div>
+      </div>
+
+      <div class="panel">
         <div class="row" style="justify-content: space-between; align-items: center;">
           <div class="muted">Logs</div>
           <button id="clear" class="secondary">Clear</button>
@@ -162,6 +199,7 @@
     <script>
       let socket;
       const logEl = document.getElementById("log");
+      const dataEl = document.getElementById("data");
       const statusEl = document.getElementById("status");
       const wsUrlEl = document.getElementById("wsUrl");
 
@@ -169,6 +207,12 @@
         const line = args.join(" ");
         logEl.textContent += `[${new Date().toLocaleTimeString()}] ${line}\n`;
         logEl.scrollTop = logEl.scrollHeight;
+      }
+
+      function showData(label, payload) {
+        const line = `[${new Date().toLocaleTimeString()}] ${label}\n${JSON.stringify(payload, null, 2)}\n\n`;
+        dataEl.textContent += line;
+        dataEl.scrollTop = dataEl.scrollHeight;
       }
 
       function setStatus(text, ok) {
@@ -201,6 +245,24 @@
         });
         socket.addEventListener("message", (event) => {
           log("recv:", event.data);
+          try {
+            const parsed = JSON.parse(event.data);
+            if (parsed.type === "conversation_created" && parsed.conversation?.id) {
+              document.getElementById("conversationId").value = parsed.conversation.id;
+            }
+            if (parsed.type === "history" && parsed.conversationId) {
+              document.getElementById("conversationId").value = parsed.conversationId;
+            }
+            if (
+              parsed.type === "conversation_created" ||
+              parsed.type === "list_conversations" ||
+              parsed.type === "history"
+            ) {
+              showData(parsed.type, parsed);
+            }
+          } catch {
+            // ignore non-json
+          }
         });
         socket.addEventListener("close", () => {
           log("disconnected");
@@ -222,7 +284,9 @@
         }
         const text = document.getElementById("message").value;
         const clientId = document.getElementById("clientId").value.trim();
+        const conversationId = document.getElementById("conversationId").value.trim();
         const payload = { type: "message", text, clientId };
+        if (conversationId) payload.conversationId = conversationId;
         socket.send(JSON.stringify(payload));
         log("sent:", JSON.stringify(payload));
       });
@@ -248,8 +312,63 @@
         log("sent: ping");
       });
 
+      document.getElementById("createConversation").addEventListener("click", () => {
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
+          log("not connected");
+          return;
+        }
+        const clientId = document.getElementById("clientId").value.trim();
+        const title = document.getElementById("conversationTitle").value.trim();
+        const participantsRaw = document.getElementById("conversationParticipants").value.trim();
+        const participants = participantsRaw
+          ? participantsRaw.split(",").map((item) => item.trim()).filter(Boolean)
+          : undefined;
+        const payload = { type: "new_conversation", clientId };
+        if (title) payload.title = title;
+        if (participants) payload.participants = participants;
+        socket.send(JSON.stringify(payload));
+        log("sent:", JSON.stringify(payload));
+      });
+
+      document.getElementById("listConversations").addEventListener("click", () => {
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
+          log("not connected");
+          return;
+        }
+        const clientId = document.getElementById("clientId").value.trim();
+        const limitRaw = document.getElementById("historyLimit").value.trim();
+        const limit = limitRaw ? Number(limitRaw) : undefined;
+        const payload = { type: "list_conversations", clientId };
+        if (Number.isFinite(limit) && limit > 0) payload.limit = limit;
+        socket.send(JSON.stringify(payload));
+        log("sent:", JSON.stringify(payload));
+      });
+
+      document.getElementById("getHistory").addEventListener("click", () => {
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
+          log("not connected");
+          return;
+        }
+        const clientId = document.getElementById("clientId").value.trim();
+        const conversationId = document.getElementById("conversationId").value.trim();
+        if (!conversationId) {
+          log("conversationId required");
+          return;
+        }
+        const limitRaw = document.getElementById("historyLimit").value.trim();
+        const limit = limitRaw ? Number(limitRaw) : undefined;
+        const payload = { type: "get_history", clientId, conversationId };
+        if (Number.isFinite(limit) && limit > 0) payload.limit = limit;
+        socket.send(JSON.stringify(payload));
+        log("sent:", JSON.stringify(payload));
+      });
+
       document.getElementById("clear").addEventListener("click", () => {
         logEl.textContent = "";
+      });
+
+      document.getElementById("clearData").addEventListener("click", () => {
+        dataEl.textContent = "";
       });
     </script>
   </body>

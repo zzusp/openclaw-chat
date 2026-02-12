@@ -22,6 +22,12 @@ export type OpenclawChatAccountConfig = {
   allowFrom?: Array<string | number>;
   /** Max inbound media size in MB (for future use). */
   mediaMaxMb?: number;
+  /** Enable local JSON history storage. Default: true. */
+  historyEnabled?: boolean;
+  /** History JSON file path or directory (per-account file will be created). */
+  historyPath?: string;
+  /** Max messages kept per conversation. Default: 5000. */
+  historyMaxMessages?: number;
 };
 
 /** Top-level OpenClaw Chat config section (channels.openclawChat). */

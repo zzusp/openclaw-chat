@@ -64,10 +64,50 @@ Send a message:
 { "type": "message", "text": "你好", "clientId": "ios-user-001" }
 ```
 
+**Note:** If `conversationId` is not provided or is empty, it will default to the `clientId` value.
+
+Continue a conversation (use an existing `conversationId`):
+
+```json
+{ "type": "message", "text": "继续聊这个", "clientId": "ios-user-001", "conversationId": "conv-..." }
+```
+
+Create a new conversation:
+
+```json
+{ "type": "new_conversation", "title": "项目讨论", "clientId": "ios-user-001" }
+```
+
+List all conversations:
+
+```json
+{ "type": "list_conversations", "clientId": "ios-user-001" }
+```
+
+Get conversation history:
+
+```json
+{ "type": "get_history", "conversationId": "conv-...", "limit": 200, "clientId": "ios-user-001" }
+```
+
 The server replies:
 
 ```json
 { "type": "message", "from": "openclaw", "to": "ios-user-001", "text": "..." }
+```
+
+History replies:
+
+```json
+{ "type": "conversation_created", "ok": true, "conversation": { "id": "conv-...", "createdAt": 0, "updatedAt": 0, "messageCount": 0 } }
+```
+
+```json
+{ "type": "list_conversations", "ok": true, "conversations": [] }
+```
+
+```json
+{ "type": "history", "ok": true, "conversationId": "conv-...", "messages": [] }
 ```
 
 ## Test Page (Simulate iOS App)
@@ -79,6 +119,16 @@ It supports setting host/port/path/token/clientId and sending messages.
 
 - Use `authToken` in production to prevent unauthorized connections.
 - Use `dmPolicy` + `allowFrom` to restrict who can chat.
+
+## History Storage
+
+By default, conversation history is stored as one JSON file per conversation under `/home/node/.openclaw/openclaw-chat/`.
+
+Config options (under `channels.openclawChat.*` or per-account):
+
+- `historyEnabled`: boolean, default true
+- `historyPath`: string, directory for history JSON
+- `historyMaxMessages`: number, max messages kept per conversation (default 5000)
 
 ## License
 

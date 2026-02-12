@@ -21,6 +21,9 @@ const openclawChatAccountJsonSchema = {
       items: { oneOf: [{ type: "string" as const }, { type: "number" as const }] },
     },
     mediaMaxMb: { type: "number" as const },
+    historyEnabled: { type: "boolean" as const },
+    historyPath: { type: "string" as const },
+    historyMaxMessages: { type: "number" as const },
   },
   additionalProperties: true,
 };

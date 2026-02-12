@@ -22,6 +22,77 @@ function log(msg) {
   console.log(`[build] ${msg}`);
 }
 
+function ensureDependencies() {
+  const typesNodePath = join(ROOT, 'node_modules', '@types', 'node');
+  const typescriptPath = join(ROOT, 'node_modules', 'typescript');
+  
+  const needsTypesNode = !existsSync(typesNodePath);
+  const needsTypeScript = !existsSync(typescriptPath);
+  
+  if (needsTypesNode || needsTypeScript) {
+    log('Installing required dependencies...');
+    const packages = [];
+    if (needsTypesNode) packages.push('@types/node');
+    if (needsTypeScript) packages.push('typescript');
+    
+    log(`  Missing: ${packages.join(', ')}`);
+    
+    try {
+      // Force installation by unsetting NODE_ENV and using --include=dev
+      // This ensures devDependencies are installed even in production environments
+      const env = { ...process.env };
+      delete env.NODE_ENV;
+      
+      // First, try to install all dependencies (including devDependencies)
+      log('  Installing all dependencies (including devDependencies)...');
+      try {
+        execSync('npm install', { 
+          cwd: ROOT, 
+          stdio: 'inherit',
+          env: env
+        });
+      } catch (fullInstallErr) {
+        // If full install fails, try installing just the missing packages
+        log('  Installing missing packages directly...');
+        execSync(`npm install --no-save ${packages.join(' ')}`, { 
+          cwd: ROOT, 
+          stdio: 'inherit',
+          env: env
+        });
+      }
+      
+      // Verify installation - check if files exist now
+      if (needsTypesNode && !existsSync(typesNodePath)) {
+        // Check if node_modules exists at all
+        const nodeModulesPath = join(ROOT, 'node_modules');
+        const typesPath = join(ROOT, 'node_modules', '@types');
+        if (!existsSync(nodeModulesPath)) {
+          throw new Error('node_modules directory not found. Please run: npm install');
+        }
+        if (!existsSync(typesPath)) {
+          throw new Error('@types directory not found. The installation may have failed.');
+        }
+        // List what's in @types to help debug
+        try {
+          const typesContents = readdirSync(typesPath);
+          throw new Error(`@types/node not found. Found in @types: ${typesContents.join(', ')}`);
+        } catch (listErr) {
+          throw new Error(`@types/node not found at ${typesNodePath} and cannot list @types directory`);
+        }
+      }
+      if (needsTypeScript && !existsSync(typescriptPath)) {
+        throw new Error(`typescript not found at ${typescriptPath} after installation. Please run: npm install`);
+      }
+      
+      log('  Dependencies installed successfully');
+    } catch (err) {
+      console.error('Failed to install dependencies:', err.message);
+      console.error('Please ensure you have run: npm install');
+      process.exit(1);
+    }
+  }
+}
+
 function copyDir(src, dest) {
   if (!existsSync(dest)) mkdirSync(dest, { recursive: true });
   for (const entry of readdirSync(src)) {
@@ -53,8 +124,24 @@ function buildFor(env) {
   
   // Run TypeScript compiler to temp directory
   log('  Running tsc...');
+  
+  // Verify @types/node is available before compiling
+  const typesNodePath = join(ROOT, 'node_modules', '@types', 'node');
+  if (!existsSync(typesNodePath)) {
+    console.error(`Error: @types/node not found at ${typesNodePath}`);
+    console.error('Please ensure dependencies are installed: npm install');
+    process.exit(1);
+  }
+  
   try {
-    execSync(`npx tsc --outDir ${tempDist}`, { cwd: ROOT, stdio: 'inherit' });
+    // Try to use local TypeScript first, fallback to npx if not available
+    const localTsc = process.platform === 'win32'
+      ? join(ROOT, 'node_modules', '.bin', 'tsc.cmd')
+      : join(ROOT, 'node_modules', '.bin', 'tsc');
+    const tscCommand = existsSync(localTsc)
+      ? `"${localTsc}" --outDir "${tempDist}"`
+      : `npx --package=typescript tsc --outDir "${tempDist}"`;
+    execSync(tscCommand, { cwd: ROOT, stdio: 'inherit', shell: true });
   } catch (err) {
     console.error(`Build failed for ${env}`);
     process.exit(1);
@@ -137,6 +224,7 @@ function clean() {
 
 // Main
 log(`Target: ${target}`);
+ensureDependencies();
 clean();
 mkdirSync(DIST, { recursive: true });
 

@@ -17,6 +17,12 @@ import {
   sendRawToClient,
   setClientId,
 } from "./connections.js";
+import {
+  appendConversationMessage,
+  createConversation,
+  getConversationHistory,
+  listConversations,
+} from "./conversation-store.js";
 
 /** Options for the OpenClaw Chat provider. */
 export type OpenclawChatProviderOptions = {
@@ -37,6 +43,9 @@ type InboundMessage = {
   clientId?: string;
   chatType?: "direct" | "group";
   conversationId?: string;
+  title?: string;
+  participants?: string[];
+  limit?: number;
   mediaUrl?: string;
   meta?: Record<string, unknown>;
   token?: string;
@@ -131,6 +140,88 @@ export function startOpenclawChatProvider(
         return;
       }
 
+      if (
+        payload.type === "new_conversation" ||
+        payload.type === "newConversation" ||
+        payload.type === "create_conversation"
+      ) {
+        const conversationId = sanitizeConversationId(payload.conversationId) || createConversationId();
+        const title = payload.title?.trim() || undefined;
+        const participants = payload.participants?.filter((entry) => Boolean(entry));
+        const record = await createConversation({
+          account,
+          conversationId,
+          title,
+          participants,
+          log,
+        });
+
+        sendRawToClient(ws, {
+          type: "conversation_created",
+          ok: Boolean(record),
+          conversation: record
+            ? {
+                id: record.id,
+                createdAt: record.createdAt,
+                updatedAt: record.updatedAt,
+                title: record.title,
+                participants: record.participants,
+                messageCount: record.messages.length,
+              }
+            : null,
+        });
+        return;
+      }
+
+      if (payload.type === "list_conversations") {
+        const conversations = await listConversations({
+          account,
+          log,
+          limit: payload.limit,
+        });
+        sendRawToClient(ws, {
+          type: "list_conversations",
+          ok: true,
+          conversations,
+        });
+        return;
+      }
+
+      if (payload.type === "get_history") {
+        const conversationId = sanitizeConversationId(payload.conversationId);
+        if (!conversationId) {
+          sendRawToClient(ws, {
+            type: "history",
+            ok: false,
+            error: "conversationId required",
+          });
+          return;
+        }
+        const history = await getConversationHistory({
+          account,
+          conversationId,
+          log,
+          limit: payload.limit,
+        });
+        sendRawToClient(ws, {
+          type: "history",
+          ok: true,
+          conversationId,
+          conversation: history.conversation
+            ? {
+                id: history.conversation.id,
+                createdAt: history.conversation.createdAt,
+                updatedAt: history.conversation.updatedAt,
+                title: history.conversation.title,
+                participants: history.conversation.participants,
+                messageCount: history.conversation.messages.length,
+              }
+            : null,
+          messages: history.messages,
+        });
+        return;
+      }
+
       if (payload.type !== "message" && payload.type !== undefined) {
         return;
       }
@@ -187,6 +278,28 @@ export function startOpenclawChatProvider(
       };
 
       try {
+        try {
+          await appendConversationMessage({
+            account,
+            conversationId,
+            log,
+            message: {
+              direction: "inbound",
+              ts: Date.now(),
+              from: senderId,
+              to: conversationId,
+              text: messageText,
+              mediaUrl,
+              chatType,
+              meta: payload.meta,
+            },
+          });
+        } catch (err) {
+          log.error(
+            `[openclawChat:${account.accountId}] History write failed: ${err instanceof Error ? err.message : String(err)}`,
+          );
+        }
+
         await channel.reply.dispatchReplyWithBufferedBlockDispatcher({
           ctx: inboundCtx,
           cfg: (runtime as { config?: { loadConfig?: () => ClawdbotConfig } }).config?.loadConfig?.() ?? config,
@@ -216,6 +329,27 @@ export function startOpenclawChatProvider(
                 mediaUrl: replyMediaUrl,
                 ts: Date.now(),
               };
+
+              try {
+                await appendConversationMessage({
+                  account,
+                  conversationId,
+                  log,
+                  message: {
+                    direction: "outbound",
+                    ts: response.ts,
+                    from: "openclaw",
+                    to: senderId,
+                    text: replyText,
+                    mediaUrl: replyMediaUrl,
+                    chatType,
+                  },
+                });
+              } catch (err) {
+                log.error(
+                  `[openclawChat:${account.accountId}] History write failed: ${err instanceof Error ? err.message : String(err)}`,
+                );
+              }
 
               sendRawToClient(ws, response);
             },
@@ -276,12 +410,23 @@ function sanitizeClientId(input?: string): string | undefined {
   return trimmed;
 }
 
+function sanitizeConversationId(input?: string): string | undefined {
+  if (!input) return undefined;
+  const trimmed = input.trim();
+  if (!trimmed) return undefined;
+  return trimmed;
+}
+
 function createClientId(): string {
   return `client-${randomUUID()}`;
 }
 
 function createMessageId(): string {
   return `msg-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+}
+
+function createConversationId(): string {
+  return `conv-${randomUUID()}`;
 }
 
 function coerceMessageText(data: unknown): string {
